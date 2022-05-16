@@ -1,26 +1,70 @@
 
-<Project DefaultTargets="FullBuild" xmlns="http://schemas.microsoft.com/developer/msbuild/2003" >
+<Project DefaultTargets="FullBuild" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <!-- Import default code signing properties and the task -->
+    <Import Project="$(AWSDotNetBuildToolsRoot)\BuildUtilities\CodeSign.proj" Condition="'$(AWSDotNetBuildToolsRoot)' != '' And '$(CodeSigning)' != ''" />
+
     <PropertyGroup>
       <SolutionFile></SolutionFile>
     </PropertyGroup>
 
     <!-- <Target Name="FullBuild" DependsOnTargets="Compile;Nuget;Test45;Test" /> -->
-    <Target Name="FullBuild" DependsOnTargets="Compile;Test;Nuget" />
+    <Target Name="FullBuild" DependsOnTargets="Compile;CodeSign;Test;Nuget" />
     <Target Name = "Compile">
       <Exec Command="dotnet restore AWS.Logger.sln"/>
       <Exec Command="dotnet msbuild AWS.Logger.sln /p:Configuration=Release /p:AWSKeyFile=$(CustomSnkFileLocation)"/>
     </Target>
 
-    <Target Name = "Nuget" DependsOnTargets="Compile;Test">
+    <Target Name="CodeSign" DependsOnTargets="Compile" Condition="'$(CodeSigning)' != ''">
+      <!-- Configure project specfic code sign properties -->
+      <ItemGroup>
+        <SignableItems Include=".\src\AWS.Logger.*\bin\Release\**\AWS.Logger.*.dll" />
+        <SignableItems Include=".\src\NLog.AWS.Logger\bin\Release\**\NLog.AWS.*.dll" />
+      </ItemGroup>
+
+      <PropertyGroup>
+        <SignableItemsBasePath>$(MSBuildThisFileDirectory)</SignableItemsBasePath>
+        <ZipFilesPath>codesign-zip</ZipFilesPath>
+        <SigningS3KeyPrefix>aws.logger</SigningS3KeyPrefix>
+        <SignedItemsPath>$(MSBuildThisFileDirectory)</SignedItemsPath>
+      </PropertyGroup>
+
+      <CodeSignTask
+        SignableItemsBasePath="$(SignableItemsBasePath)"
+        SignableItems="@(SignableItems)"
+        ZipItemsBeforeSigning="$(ZipItemsBeforeSigning)"
+        ZipPrefix="$(ZipPrefix)"
+        NumberOfFilesPerZip="$(NumberOfFilesPerZip)"
+        ZipFilesPath="$(ZipFilesPath)"
+        SigningProfileName="$(SigningProfileName)"
+        SigningRoleArn="$(SigningRoleArn)"
+        SigningRoleSessionName="$(SigningRoleSessionName)"
+        SigningBucketRegion="$(SigningBucketRegion)"
+        SignerServiceRegion="$(SignerServiceRegion)"
+        UnsignedBucketName="$(UnsignedBucketName)"
+        SigningS3Folder="$(SigningS3Folder)"
+        SigningS3KeyPrefix="$(SigningS3KeyPrefix)"
+        SigningInitialQueryStatusDelay="$(SigningInitialQueryStatusDelay)"
+        SignedItemsPath="$(SignedItemsPath)"
+        RetryDelayMilliseconds="$(SigningRetryDelayMilliseconds)"
+        MaxRetryCount="$(SigningMaxRetryCount)">
+        <Output TaskParameter="ZipFiles" ItemName="FileWrites" />
+        <Output TaskParameter="ZipFiles" ItemName="SigningZipFiles" />
+        <Output TaskParameter="SignableArtifacts" ItemName="SignableArtifacts" />
+        <Output TaskParameter="DownloadedSignedItems" ItemName="FileWrites" />
+        <Output TaskParameter="DownloadedSignedItems" ItemName="DownloadedSignedItems" />
+  		</CodeSignTask>
+    </Target>
+
+    <Target Name="Nuget" DependsOnTargets="Compile;CodeSign">
       <!-- You could use the MSBuild Copy task here to move the compiled code into
            a structure that fits your desired package format -->
       <Exec Command="if exist Deployment rmdir /S/Q Deployment"/>
       <Exec Command="mkdir Deployment"/>
-      <Exec Command="dotnet msbuild /t:pack .\src\AWS.Logger.Core       /p:Configuration=Release /p:PackageOutputPath=..\..\Deployment" ContinueOnError="WarnAndContinue"/>
-      <Exec Command="dotnet msbuild /t:pack .\src\AWS.Logger.AspNetCore /p:Configuration=Release /p:PackageOutputPath=..\..\Deployment" ContinueOnError="WarnAndContinue"/>
-      <Exec Command="dotnet msbuild /t:pack .\src\AWS.Logger.Log4net    /p:Configuration=Release /p:PackageOutputPath=..\..\Deployment" ContinueOnError="WarnAndContinue"/>
-      <Exec Command="dotnet msbuild /t:pack .\src\NLog.AWS.Logger       /p:Configuration=Release /p:PackageOutputPath=..\..\Deployment" ContinueOnError="WarnAndContinue"/>
-      <Exec Command="dotnet msbuild /t:pack .\src\AWS.Logger.SeriLog    /p:Configuration=Release /p:PackageOutputPath=..\..\Deployment" ContinueOnError="WarnAndContinue"/>
+      <Exec Command="dotnet msbuild /t:pack .\src\AWS.Logger.Core       /p:Configuration=Release /p:PackageOutputPath=..\..\Deployment /p:NoBuild=true /p:NoRestore=true" ContinueOnError="WarnAndContinue"/>
+      <Exec Command="dotnet msbuild /t:pack .\src\AWS.Logger.AspNetCore /p:Configuration=Release /p:PackageOutputPath=..\..\Deployment /p:NoBuild=true /p:NoRestore=true" ContinueOnError="WarnAndContinue"/>
+      <Exec Command="dotnet msbuild /t:pack .\src\AWS.Logger.Log4net    /p:Configuration=Release /p:PackageOutputPath=..\..\Deployment /p:NoBuild=true /p:NoRestore=true" ContinueOnError="WarnAndContinue"/>
+      <Exec Command="dotnet msbuild /t:pack .\src\NLog.AWS.Logger       /p:Configuration=Release /p:PackageOutputPath=..\..\Deployment /p:NoBuild=true /p:NoRestore=true" ContinueOnError="WarnAndContinue"/>
+      <Exec Command="dotnet msbuild /t:pack .\src\AWS.Logger.SeriLog    /p:Configuration=Release /p:PackageOutputPath=..\..\Deployment /p:NoBuild=true /p:NoRestore=true" ContinueOnError="WarnAndContinue"/>
     </Target>
 
     <Target Name = "Test" DependsOnTargets="Compile">

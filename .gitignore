@@ -22,3 +22,6 @@
 **/Deployment/
 /src/AWS.Logger.Core/AWS.Logger.Core45.nuget.props
 *.props
+
+codesign-zip
+*.binlog
